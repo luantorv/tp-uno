@@ -1,1 +1,3 @@
 **/__pycache__/
+.gitattributes
+file/Covid19Casos.csv

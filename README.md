@@ -27,6 +27,10 @@ Donde:
 
 Como habíamos mencionado `Covid19Casos.csv` es el archivo sobre el cuál se ha basado este proyecto.
 
+>[!WARNING]
+> Este archivo NO ESTÁ en el repositorio porque GitHub no permite archivos que pesen más de 100MB.
+> Por lo que puede encontrarlo en el siguiente link: `https://drive.google.com/file/d/1rShFnSHX34S8HSuKhpkFmIKZHSKvl2hq/view?usp=sharing`
+
 `answer.py` es un archivo auxiliar que se ha utilizado como módulo, y en el cuál se han escrito las funciones y procedimientos destinados a la lógica de negocio, al análisis y tratamientos o modificaciones que se vayan haciendo para poder contestar las preguntas debidamente.
 
 `db.py` es el módulo que contiene todas las funciones y procedimientos destinados al manejo de la base de datos `SQLite3`.
