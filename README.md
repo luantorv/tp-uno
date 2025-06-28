@@ -20,6 +20,8 @@ De ésta forma nos queda el siguiente árbol de carpetas:
 |   |   db.py
 |   |   main.py
 |   |   tools.py
+|   .gitattributes
+|   .gitignore
 |   README.md
 ```
 
@@ -28,8 +30,8 @@ Donde:
 Como habíamos mencionado `Covid19Casos.csv` es el archivo sobre el cuál se ha basado este proyecto.
 
 >[!WARNING]
-> Este archivo NO ESTÁ en el repositorio porque GitHub no permite archivos que pesen más de 100MB.
-> Por lo que puede encontrarlo en el siguiente link: `https://drive.google.com/file/d/1rShFnSHX34S8HSuKhpkFmIKZHSKvl2hq/view?usp=sharing`
+> Este archivo está comprimido (en formato .ZIP) porque GitHub no permite archivos que pesen más de 100MB.
+> Por lo que, antes de ejecutar el programa tendrá que descomprimirlo.
 
 `answer.py` es un archivo auxiliar que se ha utilizado como módulo, y en el cuál se han escrito las funciones y procedimientos destinados a la lógica de negocio, al análisis y tratamientos o modificaciones que se vayan haciendo para poder contestar las preguntas debidamente.
 
@@ -38,6 +40,8 @@ Como habíamos mencionado `Covid19Casos.csv` es el archivo sobre el cuál se ha 
 El archivo `main.py` es el archivo principal del programa, y el que se encarga del control del flujo, a través de un menú con opciones que se maneja desde la consola.
 
 `tools.py` es un módulo con funciones muy útiles, pero que fueron separadas del archivo principal por prolijidad y para que sea más reutilizable a futuro.
+
+Los archivos `.gitattributes` y `.gitignore` son archivos de configuración de git. Puede ignorarlos. 
 
 Y el `README.md` es el archivo que usted está leyendo ahora mismo, siendo la documentación del presente proyecto.
 
