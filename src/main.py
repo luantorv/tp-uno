@@ -3,24 +3,23 @@ import answer as ans
 
 # Cargar tabla con datos semi-crudos
 
+t.limpiar()
 ans.cargar_csv_a_db("./file/Covid19Casos.csv")
 
 
 # MENÚ
-
-t.limpiar()
 
 bol = False
 seg = True
 
 while seg:
     if bol == False:
-        print("================= Menú =================\n")
+        print("\n================= Menú =================\n")
     else:
         print("Elija una opción válida: n")
         bol = False
 
-    print("Opción 1: ")
+    print("Opción 1: Descripción de las variables")
     print("Opción 2: ")
     print("Opción 3: Salir \n")
 
@@ -29,6 +28,7 @@ while seg:
     match op:
         case 1:
             t.limpiar()
+            ans.describir_variables()
             seg = t.seguir()
         case 2:
             seg = t.seguir()
