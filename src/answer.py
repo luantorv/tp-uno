@@ -60,6 +60,7 @@ def cargar_csv_a_db(path_csv, tam_lote=1000):
     cargados_despues = contar_registros()
     nuevos = cargados_despues - cargados_antes
     print(f"\nCarga finalizada. Nuevos registros insertados: {nuevos}")
+    print(f"Registros duplicados ignorados: {duplicados}")
     print(f"Total en base de datos: {cargados_despues}")
 
 

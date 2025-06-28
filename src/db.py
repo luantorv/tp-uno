@@ -15,14 +15,13 @@ def crear_tabla_crudos():
     '''
     Se asegura que exista la tabla registros_crudos en la Base de Datos.
     '''
-    duplicados = 0
 
     with conectar() as conn:
         cursor = conn.cursor()
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS registros_crudos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                fila_csv INTEGER,
+                fila_csv INTEGER UNIQUE,
                 sexo TEXT,
                 edad INTEGER,
                 edad_años_meses TEXT,
@@ -48,6 +47,7 @@ def insertar_crudo(registro):
     '''
 
     duplicados = 0
+    errores = 0
 
     with conectar() as conn:
         cursor = conn.cursor()
@@ -61,8 +61,8 @@ def insertar_crudo(registro):
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', registro)
             conn.commit()
-        except sqlite3.IntegrityError as e:
-            print(f"⚠️ Lote falló. Intentando insertar fila por fila. Error: {e}")
+
+        except sqlite3.IntegrityError:
             for fila in registro:
                 try:
                     cursor.execute('''
@@ -76,6 +76,12 @@ def insertar_crudo(registro):
                     conn.commit()
                 except sqlite3.IntegrityError:
                     duplicados += 1
+                except Exception:
+                    errores += 1 
+
+    if errores > 0:
+        print(f"{errores} errores inesperados al insertar.")
+
     return duplicados
 
 def eliminar_duplicados_crudos():
