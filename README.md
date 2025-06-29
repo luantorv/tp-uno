@@ -1,4 +1,7 @@
+
 # Trabajo Práctico Nº1 de Estadística y Exploración de Datos
+
+!̣[file](./carpeta/juunio.png)
 
 ## Alumnos:
 
