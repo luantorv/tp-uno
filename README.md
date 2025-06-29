@@ -2,7 +2,7 @@
 
 ## Alumnos:
 
-- Maidana, Jonatan
+- Maidana, Yonatan Manuel
 - Reis Viera, Luis Antonio
 
 ## Árbol del Proyecto
