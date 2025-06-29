@@ -1,7 +1,7 @@
 
 # Trabajo Práctico Nº1 de Estadística y Exploración de Datos
 
-!̣[file](./file/juunio.png)
+<img src="./file/juunio.png" alt="Foto" width=auto>
 
 ## Alumnos:
 
