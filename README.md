@@ -21,6 +21,7 @@ De ésta forma nos queda el siguiente árbol de carpetas:
 |   src/
 |   |   answer.py
 |   |   db.py
+|   |   loader.py
 |   |   main.py
 |   |   tools.py
 |   .gitattributes
@@ -38,7 +39,11 @@ Como habíamos mencionado `Covid19Casos.csv` es el archivo sobre el cuál se ha 
 
 `answer.py` es un archivo auxiliar que se ha utilizado como módulo, y en el cuál se han escrito las funciones y procedimientos destinados a la lógica de negocio, al análisis y tratamientos o modificaciones que se vayan haciendo para poder contestar las preguntas debidamente.
 
+`cleanning.py` es un módulo con funciones destinadas a la limpieza de los datos.
+
 `db.py` es el módulo que contiene todas las funciones y procedimientos destinados al manejo de la base de datos `SQLite3`.
+
+`loader.py` es un archivo que contiene a la función para cargar el CSV a la base de datos. Se puso aparte porque es bastante grande y iba a estorbar si se ponía en `answer.py` o `db.py`.
 
 El archivo `main.py` es el archivo principal del programa, y el que se encarga del control del flujo, a través de un menú con opciones que se maneja desde la consola.
 

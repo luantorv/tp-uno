@@ -1,74 +1,9 @@
-import csv
-from db import crear_tabla_crudos, insertar_crudo, conectar, contar_registros
-from tools import limpiar_str as limpiar
-
-def cargar_csv_a_db(path_csv, tam_lote=1000):
-    '''
-    Invoca a crear_tabla_crudos() que se asegura que exista, para poder guardar datos en ella.
-
-    Abre el archivo y se fija cuantos registros hay (sin contar las cabeceras)
-    
-    Vuelve a abrir el archivo y crea una variable para cada campo les hace un .strip()
-    o deja un None (para que sea más fácil trabajar con ellos después), para luego
-    insertarlos en la tabla como un registro.
-
-    También muestra un mensaje en consola que se actualiza cada 1000 registros, y otro
-    mensaje cuando termina.
-    '''
-
-    crear_tabla_crudos()
-
-    with open(path_csv, newline='', encoding='utf-8') as f:
-        total = sum(1 for _ in f) - 1
-
-    
-    lote = []
-    cargados_antes = contar_registros()
-    duplicados = 0
-
-    with open(path_csv, newline='', encoding='utf-8') as archivo:
-        lector = csv.DictReader(archivo)
-
-        for i, fila in enumerate(lector, start=1):
-            sexo = limpiar(fila.get("sexo"))
-            edad = fila.get("edad", "").strip()
-            edad = int(edad) if edad.isdigit() else None
-            edad_años_meses = limpiar(fila.get("edad_años_meses"))
-            residencia_pais = limpiar(fila.get("residencia_pais_nombre"))
-            residencia_prov = limpiar(fila.get("residencia_provincia_nombre"))
-            residencia_dpto = limpiar(fila.get("residencia_departamento_nombre"))
-            carga_prov = limpiar(fila.get("carga_provincia_nombre"))
-            fallecido = limpiar(fila.get("fallecido"))
-            arm = limpiar(fila.get("asistencia_respiratoria_mecanica"))
-            financiamiento = limpiar(fila.get("origen_financiamiento"))
-            clasificacion = limpiar(fila.get("clasificacion"))
-            fecha_diag = limpiar(fila.get("fecha_diagnostico"))
-
-            lote.append((
-                i, sexo, edad, edad_años_meses,
-                residencia_pais, residencia_prov, residencia_dpto,
-                carga_prov, fallecido, arm,
-                financiamiento, clasificacion, fecha_diag
-            ))
-
-            if i % tam_lote == 0 or i == total:
-                duplicados += insertar_crudo(lote)
-                porcentaje = (i / total) * 100
-                print(f"Cargando: {i} de {total} ({porcentaje:.2f}%)", end='\r')
-                lote = []
-
-    cargados_despues = contar_registros()
-    nuevos = cargados_despues - cargados_antes
-    print(f"\nCarga finalizada. Nuevos registros insertados: {nuevos}")
-    print(f"Registros duplicados ignorados: {duplicados}")
-    print(f"Total en base de datos: {cargados_despues}")
-
-
+from db import conectar
 
 def describir_variables():
     '''
     Ya que no hay tantas columnas, y el archivo no es variable, podemos
-    hacer el análisis de numerica/categorica de forma """manual"""guardandolo
+    hacer el análisis de numerica/categorica de forma """manual""" guardandolo
     como pares ordenados en la lista columnas.
 
     Después mediante consultas SQL se verifica cuantos registros hay en la tabla,
@@ -132,3 +67,54 @@ def describir_variables():
                 print(f"Valores más frecuentes:")
                 for valor, freq in filas:
                     print(f"  {valor or '[VACÍO]'}: {freq} veces")
+
+def describir_variables_limpias():
+    '''
+    Imprime estadísticas y resumen para cada variable de la tabla registros_limpios.
+    '''
+    with conectar() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT COUNT(*) FROM registros_limpios')
+        total = cursor.fetchone()[0]
+        print("\nDESCRIPCIÓN DE VARIABLES EN registros_limpios")
+        print("───────────────────────────────────────────────")
+
+        columnas = [
+            ("sexo", True),
+            ("edad", False),
+            ("residencia_pais_nombre", True),
+            ("residencia_provincia_nombre", True),
+            ("carga_provincia_nombre", True),
+            ("fallecido", True),
+            ("asistencia_respiratoria_mecanica", True),
+            ("origen_financiamiento", True),
+            ("clasificacion", True),
+            ("fecha_diagnostico", True)
+        ]
+
+        for col, es_categorica in columnas:
+            print(f"\n--- {col.upper()} ({'categorica' if es_categorica else 'numerica'}) ---")
+            cursor.execute(f'SELECT COUNT(*) FROM registros_limpios WHERE {col} IS NOT NULL')
+            no_nulos = cursor.fetchone()[0]
+            nulos = total - no_nulos
+            print(f"Total registros: {total}")
+            print(f"No nulos: {no_nulos}")
+            print(f"Nulos: {nulos}")
+
+            if es_categorica:
+                cursor.execute(f'''
+                    SELECT {col}, COUNT(*)
+                    FROM registros_limpios
+                    GROUP BY {col}
+                    ORDER BY COUNT(*) DESC
+                    LIMIT 10
+                ''')
+                print("Valores más frecuentes:")
+                for valor, freq in cursor.fetchall():
+                    print(f"  {valor}: {freq} veces")
+            else:
+                cursor.execute(f'SELECT MIN({col}), MAX({col}), AVG({col}) FROM registros_limpios')
+                minimo, maximo, promedio = cursor.fetchone()
+                print(f"Rango: {minimo} - {maximo}")
+                print(f"Promedio: {promedio:.2f}")
