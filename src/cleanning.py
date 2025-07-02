@@ -4,7 +4,7 @@ def crear_registros_limpios():
     '''
     Crea una nueva tabla `registros_limpios` a partir de `registros_crudos`, aplicando:
     - Conversión de edad en meses a años
-    - Eliminación de edades inválidas (>110 años o >120 meses)
+    - Eliminación de edades inválidas (>130 años o >120 meses)
     - Corrección de valores "SIN ESPECIFICAR" en residencia_pais_nombre
     - Simplificación de clasificacion
     - Eliminación de residencia_departamento_nombre y edad_años_meses.
@@ -51,7 +51,7 @@ def crear_registros_limpios():
             SELECT COUNT(*) FROM registros_crudos
             WHERE edad IS NULL OR
                   (edad_años_meses = 'MESES' AND edad > 120) OR
-                  (edad_años_meses != 'MESES' AND edad > 110)
+                  (edad_años_meses != 'MESES' AND edad > 130)
         ''')
         total_descartados = cursor.fetchone()[0]
 
@@ -89,7 +89,7 @@ def crear_registros_limpios():
             FROM registros_crudos rc
             WHERE rc.edad IS NOT NULL AND (
                 (rc.edad_años_meses = 'MESES' AND rc.edad <= 120) OR
-                (rc.edad_años_meses != 'MESES' AND rc.edad <= 110)
+                (rc.edad_años_meses != 'MESES' AND rc.edad <= 130)
             )
         '''.format(','.join(f"'{prov}'" for prov in provincias_arg)))
 
