@@ -38,6 +38,7 @@ Como habíamos mencionado `Covid19Casos.csv` es el archivo sobre el cuál se ha 
 
 >[!WARNING]
 > Este archivo está comprimido (en formato .ZIP) porque GitHub no permite archivos que pesen más de 100MB.
+> Puede encontrarlo en el proyecto como `Covid19Casos.zip`
 > Por lo que, antes de ejecutar el programa tendrá que descomprimirlo.
 
 `juunio.png` es una imagen del logo del ESIM-ISFDyT para utilizarlo en la documentación externa del proyecto.
@@ -62,6 +63,6 @@ Y el `README.md` es el archivo que usted está leyendo ahora mismo, siendo la do
 
 ## Créditos
 
-Este proyecto es/fue realizado en el contexto de la matería __Estadística y Exploración de Datos__ de la __Tecnicatura Superior en Ciencia de Datos e Inteligencia Artificial__ del __Instituto Superior de Formación Docente y Técnica__ de Posadas, Misiones, Argentina.
+Este proyecto fue realizado en el contexto de la matería __Estadística y Exploración de Datos__ de la __Tecnicatura Superior en Ciencia de Datos e Inteligencia Artificial__ del __Instituto Superior de Formación Docente y Técnica__ de Posadas, Misiones, Argentina.
 
 > Para más información: `https://web.esim.edu.ar/`
