@@ -5,7 +5,6 @@
 
 ## Alumnos:
 
-- Maidana, Yonatan Manuel
 - Reis Viera, Luis Antonio
 
 ## Árbol del Proyecto
@@ -18,9 +17,13 @@ De ésta forma nos queda el siguiente árbol de carpetas:
 /
 |   file/
 |   |   Covid19Casos.csv
+|   |   Covid19Casos.zip
+|   |   juunio.png
 |   src/
 |   |   answer.py
+|   |   cleanning.py
 |   |   db.py
+|   |   entrega.py
 |   |   loader.py
 |   |   main.py
 |   |   tools.py
@@ -37,11 +40,15 @@ Como habíamos mencionado `Covid19Casos.csv` es el archivo sobre el cuál se ha 
 > Este archivo está comprimido (en formato .ZIP) porque GitHub no permite archivos que pesen más de 100MB.
 > Por lo que, antes de ejecutar el programa tendrá que descomprimirlo.
 
+`juunio.png` es una imagen del logo del ESIM-ISFDyT para utilizarlo en la documentación externa del proyecto.
+
 `answer.py` es un archivo auxiliar que se ha utilizado como módulo, y en el cuál se han escrito las funciones y procedimientos destinados a la lógica de negocio, al análisis y tratamientos o modificaciones que se vayan haciendo para poder contestar las preguntas debidamente.
 
 `cleanning.py` es un módulo con funciones destinadas a la limpieza de los datos.
 
 `db.py` es el módulo que contiene todas las funciones y procedimientos destinados al manejo de la base de datos `SQLite3`.
+
+`entrega.py` es el archivo que se va a entregar y el cuál resume todos los demás archivos.
 
 `loader.py` es un archivo que contiene a la función para cargar el CSV a la base de datos. Se puso aparte porque es bastante grande y iba a estorbar si se ponía en `answer.py` o `db.py`.
 

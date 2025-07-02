@@ -1,6 +1,347 @@
-from db import conectar
+import os
+from os import system
+import csv
+import sqlite3
 import math
 
+''' TOOLS.PY '''
+def limpiar():
+    '''
+    Limpia la consola dependiendo del sistema operativo en donde se esté ejecutando.
+    '''
+
+    if os.name == "nt":
+        system("cls")
+    else:
+        system("clear")
+
+def limpiar_str(valor):
+    '''
+    Limpia un valor de texto: quita espacios, lo convierte a mayúsculas y devuelve None si queda vacío.
+    '''
+    if valor is None:
+        return None
+    limpio = valor.strip().upper()
+    return limpio if limpio else None
+
+
+def seguir():
+    '''
+    Pregunta al usuario si quiere volver al menú o quiere salir del programa.
+    Si quiere volver al menú devuelve True, si quiere salir devuelve False.
+    '''
+
+
+    aux = True
+
+    while True:
+        if aux == True:
+            opc = int(input("\nElija una opción: \n 1. Volver al menú \n 2. Salir \n"))
+        else:
+            opc = int(input("\nElija una opción válida: \n 1. Volver al menú \n 2. Salir \n"))
+            aux = True
+
+        match opc:
+            case 1:
+                return True
+            case 2:
+                return False
+            case _:
+                aux = False
+
+''' DB.PY '''
+DB_NAME = "data.db"
+
+def conectar():
+    '''
+    Crea la conección a la Base de Datos y la devuelve.
+    '''
+
+    return sqlite3.connect(DB_NAME)
+
+
+
+def crear_tabla_crudos():
+    '''
+    Se asegura que exista la tabla registros_crudos en la Base de Datos.
+    '''
+
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS registros_crudos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fila_csv INTEGER UNIQUE,
+                sexo TEXT,
+                edad INTEGER,
+                edad_años_meses TEXT,
+                residencia_pais_nombre TEXT,
+                residencia_provincia_nombre TEXT,
+                residencia_departamento_nombre TEXT,
+                carga_provincia_nombre TEXT,
+                fallecido TEXT,
+                asistencia_respiratoria_mecanica TEXT,
+                origen_financiamiento TEXT,
+                clasificacion TEXT,
+                fecha_diagnostico TEXT
+            )
+        ''')
+
+        conn.commit()
+
+def insertar_crudo(registro):
+    '''
+    Inserta registros en la tabla registros_crudos.
+    Si ocurre un IntegrityError en el lote, intenta insertar individualmente cada fila
+    para no perder todo el lote.
+    '''
+
+    duplicados = 0
+    errores = 0
+
+    with conectar() as conn:
+        cursor = conn.cursor()
+        try:
+            cursor.executemany('''
+                INSERT INTO registros_crudos (
+                    fila_csv, sexo, edad, edad_años_meses,
+                    residencia_pais_nombre, residencia_provincia_nombre, residencia_departamento_nombre,
+                    carga_provincia_nombre, fallecido, asistencia_respiratoria_mecanica,
+                    origen_financiamiento, clasificacion, fecha_diagnostico
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', registro)
+            conn.commit()
+
+        except sqlite3.IntegrityError:
+            for fila in registro:
+                try:
+                    cursor.execute('''
+                        INSERT INTO registros_crudos (
+                            fila_csv, sexo, edad, edad_años_meses,
+                            residencia_pais_nombre, residencia_provincia_nombre, residencia_departamento_nombre,
+                            carga_provincia_nombre, fallecido, asistencia_respiratoria_mecanica,
+                            origen_financiamiento, clasificacion, fecha_diagnostico
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', fila)
+                    conn.commit()
+                except sqlite3.IntegrityError:
+                    duplicados += 1
+                except Exception:
+                    errores += 1 
+
+    if errores > 0:
+        print(f"{errores} errores inesperados al insertar.")
+
+    return duplicados
+
+def eliminar_duplicados_crudos():
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            DELETE FROM registros_crudos
+            WHERE ROWID NOT IN (
+                SELECT MIN(ROWID)
+                FROM registros_crudos
+                GROUP BY
+                    sexo, edad, edad_años_meses,
+                    residencia_pais_nombre, residencia_provincia_nombre, residencia_departamento_nombre,
+                    carga_provincia_nombre, fallecido, asistencia_respiratoria_mecanica,
+                    origen_financiamiento, clasificacion, fecha_diagnostico
+            )
+        ''')
+        conn.commit()
+
+def contar_registros():
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM registros_crudos")
+        return cursor.fetchone()[0]
+
+def obtener_crudos():
+    '''
+    Devuelve la tabla registros_crudos
+    '''
+
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM registros_crudos")
+        return cursor.fetchall()
+
+def borrar_tabla_crudos():
+    '''
+    Borra la tabla registros_crudos. No creo que sea necesario, pero por si las dudas lo dejo acá.
+    '''
+
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM registros_crudos")
+        conn.commit()
+
+
+''' LOADER.PY '''
+def cargar_csv_a_db(path_csv, tam_lote=1000):
+    '''
+    Invoca a crear_tabla_crudos() que se asegura que exista, para poder guardar datos en ella.
+
+    Abre el archivo y se fija cuantos registros hay (sin contar las cabeceras)
+    
+    Vuelve a abrir el archivo y crea una variable para cada campo, utiliza la función .limpiar_str()
+    para limpiar los string (les hace un .upper() y un .strip()), si es un dato nulo lo rellena con un None, 
+    para luego insertarlos en la tabla como un registro.
+
+    También muestra un mensaje en consola que se actualiza cada 1000 registros, y otros
+    mensajes cuando termina, informando cuantos registros fueron añadidos, cuantos dupplicados se ignoraron
+    y el total actual de registros en la base de datos.
+    '''
+
+    crear_tabla_crudos()
+
+    with open(path_csv, newline='', encoding='utf-8') as f:
+        total = sum(1 for _ in f) - 1
+
+    
+    lote = []
+    cargados_antes = contar_registros()
+    duplicados = 0
+
+    with open(path_csv, newline='', encoding='utf-8') as archivo:
+        lector = csv.DictReader(archivo)
+
+        for i, fila in enumerate(lector, start=1):
+            sexo = limpiar_str(fila.get("sexo"))
+            edad = fila.get("edad", "").strip()
+            edad = int(edad) if edad.isdigit() else None
+            edad_años_meses = limpiar_str(fila.get("edad_años_meses"))
+            residencia_pais = limpiar_str(fila.get("residencia_pais_nombre"))
+            residencia_prov = limpiar_str(fila.get("residencia_provincia_nombre"))
+            residencia_dpto = limpiar_str(fila.get("residencia_departamento_nombre"))
+            carga_prov = limpiar_str(fila.get("carga_provincia_nombre"))
+            fallecido = limpiar_str(fila.get("fallecido"))
+            arm = limpiar_str(fila.get("asistencia_respiratoria_mecanica"))
+            financiamiento = limpiar_str(fila.get("origen_financiamiento"))
+            clasificacion = limpiar_str(fila.get("clasificacion"))
+            fecha_diag = limpiar_str(fila.get("fecha_diagnostico"))
+
+            lote.append((
+                i, sexo, edad, edad_años_meses,
+                residencia_pais, residencia_prov, residencia_dpto,
+                carga_prov, fallecido, arm,
+                financiamiento, clasificacion, fecha_diag
+            ))
+
+            if i % tam_lote == 0 or i == total:
+                duplicados += insertar_crudo(lote)
+                porcentaje = (i / total) * 100
+                print(f"Cargando: {i} de {total} ({porcentaje:.2f}%)", end='\r')
+                lote = []
+
+    cargados_despues = contar_registros()
+    nuevos = cargados_despues - cargados_antes
+    print(f"\nCarga finalizada. Nuevos registros insertados: {nuevos}")
+    print(f"Registros duplicados ignorados: {duplicados}")
+    print(f"Total en base de datos: {cargados_despues}")
+
+
+''' CLEANNING.PY '''
+def crear_registros_limpios():
+    '''
+    Crea una nueva tabla `registros_limpios` a partir de `registros_crudos`, aplicando:
+    - Conversión de edad en meses a años
+    - Eliminación de edades inválidas (>130 años o >120 meses)
+    - Corrección de valores "SIN ESPECIFICAR" en residencia_pais_nombre
+    - Simplificación de clasificacion
+    - Eliminación de residencia_departamento_nombre y edad_años_meses.
+    - Eliminación de fecha_diagnostico.
+    '''
+
+    provincias_arg = {
+        "BUENOS AIRES", "CABA", "CATAMARCA", "CHACO", "CHUBUT", "CÓRDOBA",
+        "CORRIENTES", "ENTRE RÍOS", "FORMOSA", "JUJUY", "LA PAMPA", "LA RIOJA",
+        "MENDOZA", "MISIONES", "NEUQUÉN", "RÍO NEGRO", "SALTA", "SAN JUAN",
+        "SAN LUIS", "SANTA CRUZ", "SANTA FE", "SANTIAGO DEL ESTERO", "TIERRA DEL FUEGO",
+        "TUCUMÁN"
+    }
+
+    with conectar() as conn:
+        cursor = conn.cursor()
+
+        # Eliminar tabla si existe
+        cursor.execute('DROP TABLE IF EXISTS registros_limpios')
+
+        # Crea la tabla nueva
+        cursor.execute('''
+            CREATE TABLE registros_limpios (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fila_csv INTEGER UNIQUE,
+                sexo TEXT,
+                edad INTEGER,
+                residencia_pais_nombre TEXT,
+                residencia_provincia_nombre TEXT,
+                carga_provincia_nombre TEXT,
+                fallecido TEXT,
+                asistencia_respiratoria_mecanica TEXT,
+                origen_financiamiento TEXT,
+                clasificacion TEXT
+            )
+        ''')
+
+        # Conteo total original
+        cursor.execute('SELECT COUNT(*) FROM registros_crudos')
+        total_original = cursor.fetchone()[0]
+
+        # Conteo con edad nula o fuera de rango
+        cursor.execute('''
+            SELECT COUNT(*) FROM registros_crudos
+            WHERE edad IS NULL OR
+                  (edad_años_meses = 'MESES' AND edad > 120) OR
+                  (edad_años_meses != 'MESES' AND edad > 130)
+        ''')
+        total_descartados = cursor.fetchone()[0]
+
+        cursor.execute('''
+            INSERT INTO registros_limpios (
+                fila_csv, sexo, edad, residencia_pais_nombre, residencia_provincia_nombre,
+                carga_provincia_nombre, fallecido, asistencia_respiratoria_mecanica,
+                origen_financiamiento, clasificacion
+            )
+            SELECT
+                rc.fila_csv,
+                rc.sexo,
+                CASE
+                    WHEN rc.edad_años_meses = 'MESES' AND rc.edad IS NOT NULL THEN CAST(rc.edad / 12 AS INT)
+                    ELSE rc.edad
+                END AS edad,
+                CASE
+                    WHEN rc.residencia_pais_nombre = 'SIN ESPECIFICAR'
+                         AND UPPER(rc.residencia_provincia_nombre) IN ({})
+                         THEN 'ARGENTINA'
+                    ELSE rc.residencia_pais_nombre
+                END AS residencia_pais_nombre,
+                rc.residencia_provincia_nombre,
+                rc.carga_provincia_nombre,
+                rc.fallecido,
+                rc.asistencia_respiratoria_mecanica,
+                rc.origen_financiamiento,
+                CASE
+                    WHEN rc.clasificacion LIKE '%DESCARTADO%' THEN 'DESCARTADO'
+                    WHEN rc.clasificacion LIKE '%CONFIRMADO%' THEN 'CONFIRMADO'
+                    WHEN rc.clasificacion LIKE '%SOSPECHOSO%' THEN 'SOSPECHOSO'
+                    ELSE rc.clasificacion
+                END AS clasificacion
+            FROM registros_crudos rc
+            WHERE rc.edad IS NOT NULL AND (
+                (rc.edad_años_meses = 'MESES' AND rc.edad <= 120) OR
+                (rc.edad_años_meses != 'MESES' AND rc.edad <= 130)
+            )
+        '''.format(','.join(f"'{prov}'" for prov in provincias_arg)))
+
+        conn.commit()
+
+    print("\nTabla registros_limpios creada exitosamente.")
+    print(f"Registros descartados por edad nula o fuera de rango: {total_descartados} de {total_original} ({(total_descartados / total_original) * 100:.2f}%)")
+
+
+''' ANSWER.PY '''
 poblacion_provincias = {
     'BUENOS AIRES': 17541141,
     'CABA': 3075646,
@@ -713,3 +1054,99 @@ def calcular_indice_confirmados_por_sexo():
 
     print("\nEl mayor índice de casos confirmados lo tiene:", "Mujeres" if sexo_max == 'F' else "Varones")
     print("Se utilizó como índice: confirmados / total por sexo.")
+
+
+
+''' MAIN.PY '''
+# Cargar tabla con datos semi-crudos
+
+limpiar()
+cargar_csv_a_db("./file/Covid19Casos.csv")
+
+
+# Se crea una nueva tabla con los datos limpios
+crear_registros_limpios()
+
+
+# Se crean tablas para las consignas
+crear_intervalos_confirmados_y_fallecidos()
+crear_intervalos_fallecidos_por_sexo()
+crear_casos_confirmados_por_sexo_y_provincia()
+crear_tabla_confirmados_vs_poblacion()
+crear_tabla_fallecidos_vs_poblacion()
+
+
+# MENÚ
+
+primera_vez = False
+bol = False
+seg = True
+
+while seg:
+    if primera_vez:
+        limpiar()
+    else:
+        primera_vez = True
+
+    if bol == False:
+        print("\n================= Menú =================\n")
+    else:
+        print("Elija una opción válida: n")
+        bol = False
+
+    print("Opción 1: Descripción de las variables.")
+    print("Opción 2: Descripción de las variables ya limpios.") # Es el único que no coincide del todo con la consigna
+    print("Opción 3: Promedio de edad de los fallecidos por Provencia.")
+    print("Opción 4: Tabla Sturges - Intervalos de edad - Casos confirmados y fallecidos.")
+    print("Opción 5: Tablas fallecidos hombres y mujeres según edad.")
+    print("Opción 6: Provincia con más confirmados por sexo.")
+    print("Opción 7: Jurisdicción con menor proporción de casos confirmados.")
+    print("Opción 8: Jurisdicción con mayor proporción de fallecidos.")
+    print("Opción 9: Proporción de casos confirmados en hombres y mujeres.")
+    print("Opción 0: Salir \n")
+
+    op = int(input("¿Que desea ver? \n"))
+
+    match op:
+        case 0:
+            seg = False
+        case 1:
+            limpiar()
+            describir_variables()
+            seg = seguir()
+        case 2:
+            limpiar()
+            describir_variables_limpias()
+            seg = seguir()
+        case 3:
+            limpiar()
+            edad_promedio_fallecidos_por_provincia()
+            seg = seguir()
+        case 4:
+            limpiar()
+            mostrar_tabla_intervalos("intervalos_confirmados")
+            mostrar_tabla_intervalos("intervalos_fallecidos")
+            seg = seguir()
+        case 5:
+            limpiar()
+            mostrar_intervalos_fallecidos_por_sexo()
+            seg = seguir()
+        case 6:
+            limpiar()
+            mostrar_casos_confirmados_por_sexo_y_provincia()
+            seg = seguir()
+        case 7:
+            limpiar()
+            mostrar_menor_proporcion_confirmados()
+            seg = seguir()
+        case 8:
+            limpiar()
+            mostrar_mayor_proporcion_fallecidos()
+            seg = seguir()
+        case 9:
+            limpiar()
+            calcular_indice_confirmados_por_sexo()
+            seg = seguir()
+        case _:
+            bol = True
+            limpiar()
