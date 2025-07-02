@@ -8,6 +8,7 @@ def crear_registros_limpios():
     - Corrección de valores "SIN ESPECIFICAR" en residencia_pais_nombre
     - Simplificación de clasificacion
     - Eliminación de residencia_departamento_nombre y edad_años_meses.
+    - Eliminación de fecha_diagnostico.
     '''
 
     provincias_arg = {
@@ -37,8 +38,7 @@ def crear_registros_limpios():
                 fallecido TEXT,
                 asistencia_respiratoria_mecanica TEXT,
                 origen_financiamiento TEXT,
-                clasificacion TEXT,
-                fecha_diagnostico TEXT
+                clasificacion TEXT
             )
         ''')
 
@@ -59,7 +59,7 @@ def crear_registros_limpios():
             INSERT INTO registros_limpios (
                 fila_csv, sexo, edad, residencia_pais_nombre, residencia_provincia_nombre,
                 carga_provincia_nombre, fallecido, asistencia_respiratoria_mecanica,
-                origen_financiamiento, clasificacion, fecha_diagnostico
+                origen_financiamiento, clasificacion
             )
             SELECT
                 rc.fila_csv,
@@ -84,8 +84,7 @@ def crear_registros_limpios():
                     WHEN rc.clasificacion LIKE '%CONFIRMADO%' THEN 'CONFIRMADO'
                     WHEN rc.clasificacion LIKE '%SOSPECHOSO%' THEN 'SOSPECHOSO'
                     ELSE rc.clasificacion
-                END AS clasificacion,
-                rc.fecha_diagnostico
+                END AS clasificacion
             FROM registros_crudos rc
             WHERE rc.edad IS NOT NULL AND (
                 (rc.edad_años_meses = 'MESES' AND rc.edad <= 120) OR

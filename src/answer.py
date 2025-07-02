@@ -1,6 +1,33 @@
 from db import conectar
 import math
 
+poblacion_provincias = {
+    'BUENOS AIRES': 17541141,
+    'CABA': 3075646,
+    'CATAMARCA': 429562,
+    'CHACO': 1142025,
+    'CHUBUT': 603120,
+    'CÓRDOBA': 3874893,
+    'CORRIENTES': 1216615,
+    'ENTRE RÍOS': 1432425,
+    'FORMOSA': 606041,
+    'JUJUY': 797730,
+    'LA PAMPA': 366022,
+    'LA RIOJA': 384607,
+    'MENDOZA': 2092860,
+    'MISIONES': 1213344,
+    'NEUQUÉN': 726590,
+    'RÍO NEGRO': 762067,
+    'SALTA': 1441351,
+    'SAN JUAN': 818234,
+    'SAN LUIS': 540903,
+    'SANTA CRUZ': 337226,
+    'SANTA FE': 3531351,
+    'SANTIAGO DEL ESTERO': 1060832,
+    'TIERRA DEL FUEGO': 190641,
+    'TUCUMÁN': 1694651
+}
+
 def describir_variables():
     '''
     Ya que no hay tantas columnas, y el archivo no es variable, podemos
@@ -91,7 +118,7 @@ def describir_variables_limpias():
             ("asistencia_respiratoria_mecanica", True),
             ("origen_financiamiento", True),
             ("clasificacion", True),
-            ("fecha_diagnostico", True)
+            #("fecha_diagnostico", True)
         ]
 
         for col, es_categorica in columnas:
@@ -161,7 +188,7 @@ def crear_tabla_intervalos_detallados(nombre_tabla, filtro_sql):
         # Si ya existe, omitir
         cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{nombre_tabla}'")
         if cursor.fetchone():
-            print(f"\nLa tabla '{nombre_tabla}' ya existe. Se omite su creación.")
+            print(f"La tabla '{nombre_tabla}' ya existe. Se omite su creación.")
             return
 
         # Obtener datos base
@@ -175,7 +202,7 @@ def crear_tabla_intervalos_detallados(nombre_tabla, filtro_sql):
         k = math.ceil(1 + 3.322 * math.log10(n))
         amplitud = math.ceil((edad_max - edad_min + 1) / k)
 
-        print(f"\nCreando tabla '{nombre_tabla}' con {k} intervalos (amplitud: {amplitud})")
+        print(f"Creando tabla '{nombre_tabla}' con {k} intervalos (amplitud: {amplitud})")
 
         # Crear tabla
         cursor.execute(f"DROP TABLE IF EXISTS {nombre_tabla}")
@@ -302,3 +329,387 @@ def mostrar_tabla_intervalos(nombre_tabla):
         desde, hasta, fa = intervalo_max
         print(f"Intervalo con mayor cantidad de registros: {desde}-{hasta - 1} ({fa} casos)")
 
+def crear_intervalos_fallecidos_por_sexo(k=0):
+    '''
+    Crea dos tablas:
+    - intervalos_fallecidas_mujeres
+    - intervalos_fallecidos_varones
+
+    Utiliza Sturges si k=0, o el valor dado de k.
+    '''
+    with conectar() as conn:
+        cursor = conn.cursor()
+
+        # Total fallecidos por sexo
+        cursor.execute("SELECT COUNT(*) FROM registros_limpios WHERE sexo = 'F' AND fallecido = 'SI'")
+        total_f = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM registros_limpios WHERE sexo = 'M' AND fallecido = 'SI'")
+        total_m = cursor.fetchone()[0]
+
+        # Rango de edad
+        cursor.execute("SELECT MIN(edad), MAX(edad) FROM registros_limpios WHERE fallecido = 'SI'")
+        edad_min, edad_max = cursor.fetchone()
+
+        # Cálculo de k si no se pasa
+        if k <= 0:
+            cursor.execute("SELECT COUNT(*) FROM registros_limpios WHERE fallecido = 'SI'")
+            total_fallecidos = cursor.fetchone()[0]
+            k = math.ceil(1 + 3.322 * math.log10(total_fallecidos))
+
+        amplitud = math.ceil((edad_max - edad_min + 1) / k)
+
+        # Borra tablas anteriores si existen
+        cursor.execute("DROP TABLE IF EXISTS intervalos_fallecidas_mujeres")
+        cursor.execute("DROP TABLE IF EXISTS intervalos_fallecidos_varones")
+
+        cursor.execute('''
+            CREATE TABLE intervalos_fallecidas_mujeres (
+                desde INTEGER,
+                hasta INTEGER,
+                fa INTEGER,
+                fr REAL,
+                frp REAL
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE intervalos_fallecidos_varones (
+                desde INTEGER,
+                hasta INTEGER,
+                fa INTEGER,
+                fr REAL,
+                frp REAL
+            )
+        ''')
+
+        # Insertar intervalos
+        for i in range(k):
+            desde = edad_min + i * amplitud
+            hasta = desde + amplitud
+
+            # Mujeres
+            cursor.execute('''
+                SELECT COUNT(*) FROM registros_limpios
+                WHERE sexo = 'F' AND fallecido = 'SI' AND edad >= ? AND edad < ?
+            ''', (desde, hasta))
+            fa_f = cursor.fetchone()[0]
+            fr_f = fa_f / total_f if total_f else 0
+            frp_f = fr_f * 100
+
+            cursor.execute('''
+                INSERT INTO intervalos_fallecidas_mujeres (desde, hasta, fa, fr, frp)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (desde, hasta, fa_f, fr_f, frp_f))
+
+            # Varones
+            cursor.execute('''
+                SELECT COUNT(*) FROM registros_limpios
+                WHERE sexo = 'M' AND fallecido = 'SI' AND edad >= ? AND edad < ?
+            ''', (desde, hasta))
+            fa_m = cursor.fetchone()[0]
+            fr_m = fa_m / total_m if total_m else 0
+            frp_m = fr_m * 100
+
+            cursor.execute('''
+                INSERT INTO intervalos_fallecidos_varones (desde, hasta, fa, fr, frp)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (desde, hasta, fa_m, fr_m, frp_m))
+
+        conn.commit()
+
+    print("Tablas 'intervalos_fallecidas_mujeres' y 'intervalos_fallecidos_varones' creadas correctamente.")
+
+
+def mostrar_intervalos_fallecidos_por_sexo():
+    '''
+    Muestra ambas tablas por consola, indicando el intervalo con más fallecidas
+    y el de mayor porcentaje de fallecidos varones.
+    '''
+    def mostrar_tabla(nombre_tabla, criterio):
+        with conectar() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f'''
+                SELECT desde, hasta, fa, fr, frp FROM {nombre_tabla} ORDER BY desde ASC
+            ''')
+            filas = cursor.fetchall()
+
+            if criterio == "fa":
+                cursor.execute(f'''
+                    SELECT desde, hasta, fa FROM {nombre_tabla} ORDER BY fa DESC LIMIT 1
+                ''')
+            else:
+                cursor.execute(f'''
+                    SELECT desde, hasta, frp FROM {nombre_tabla} ORDER BY frp DESC LIMIT 1
+                ''')
+            intervalo_max = cursor.fetchone()
+
+        print(f"\nTabla: {nombre_tabla}")
+        print("─" * 60)
+        print(f"{'Intervalo':<15} {'FA':>6} {'FR':>10} {'FR%':>10}")
+        print("─" * 60)
+
+        for desde, hasta, fa, fr, frp in filas:
+            print(f"{desde}-{hasta - 1:<13} {fa:>6} {fr:>10.4f} {frp:>10.2f}")
+
+        print("─" * 60)
+        if criterio == "fa":
+            desde, hasta, fa = intervalo_max
+            print(f"Intervalo con mayor número de mujeres fallecidas: {desde}-{hasta - 1} ({fa} casos)")
+        else:
+            desde, hasta, frp = intervalo_max
+            print(f"Intervalo con mayor % de varones fallecidos: {desde}-{hasta - 1} ({frp:.2f}%)")
+
+    mostrar_tabla("intervalos_fallecidas_mujeres", "fa")
+    mostrar_tabla("intervalos_fallecidos_varones", "fa")
+
+
+
+def crear_casos_confirmados_por_sexo_y_provincia():
+    '''
+    Crea dos tablas que cuentan los casos confirmados por provincia según sexo:
+    - confirmados_mujeres_por_provincia
+    - confirmados_varones_por_provincia
+    '''
+
+    with conectar() as conn:
+        cursor = conn.cursor()
+
+        # Borrar si existen
+        cursor.execute("DROP TABLE IF EXISTS confirmados_mujeres_por_provincia")
+        cursor.execute("DROP TABLE IF EXISTS confirmados_varones_por_provincia")
+
+        # Crear las tablas
+        cursor.execute('''
+            CREATE TABLE confirmados_mujeres_por_provincia (
+                provincia TEXT,
+                cantidad INTEGER
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE confirmados_varones_por_provincia (
+                provincia TEXT,
+                cantidad INTEGER
+            )
+        ''')
+
+        # Mujeres
+        cursor.execute('''
+            INSERT INTO confirmados_mujeres_por_provincia (provincia, cantidad)
+            SELECT residencia_provincia_nombre, COUNT(*) 
+            FROM registros_limpios
+            WHERE sexo = 'F' AND clasificacion = 'CONFIRMADO'
+            GROUP BY residencia_provincia_nombre
+        ''')
+
+        # Varones
+        cursor.execute('''
+            INSERT INTO confirmados_varones_por_provincia (provincia, cantidad)
+            SELECT residencia_provincia_nombre, COUNT(*) 
+            FROM registros_limpios
+            WHERE sexo = 'M' AND clasificacion = 'CONFIRMADO'
+            GROUP BY residencia_provincia_nombre
+        ''')
+
+        conn.commit()
+
+    print("Tablas 'confirmados_mujeres_por_provincia' y 'confirmados_varones_por_provincia' creadas correctamente.")
+
+
+
+def mostrar_casos_confirmados_por_sexo_y_provincia():
+    '''
+    Muestra por consola los casos confirmados por provincia para mujeres y varones.
+    También informa cuál provincia lidera cada caso.
+    '''
+
+    def mostrar_tabla(nombre_tabla, sexo):
+        with conectar() as conn:
+            cursor = conn.cursor()
+
+            cursor.execute(f'''
+                SELECT provincia, cantidad FROM {nombre_tabla} ORDER BY cantidad DESC
+            ''')
+            filas = cursor.fetchall()
+
+            top = filas[0] if filas else ("Desconocido", 0)
+
+        print(f"\nCasos confirmados en {sexo}")
+        print("─" * 40)
+        print(f"{'Provincia':<25} {'Cantidad':>10}")
+        print("─" * 40)
+        for provincia, cantidad in filas:
+            print(f"{provincia:<25} {cantidad:>10}")
+        print("─" * 40)
+        print(f"Provincia con más casos en {sexo.lower()}: {top[0]} ({top[1]} casos)")
+
+    mostrar_tabla("confirmados_mujeres_por_provincia", "Mujeres")
+    mostrar_tabla("confirmados_varones_por_provincia", "Varones")
+
+
+
+def crear_tabla_confirmados_vs_poblacion():
+    """
+    Crea una tabla temporal en la base de datos con:
+    - Provincia
+    - Cantidad de casos confirmados
+    - Población total (según Censo 2022)
+    - Proporción de casos confirmados respecto a la población
+    """
+
+    with conectar() as conn:
+        cursor = conn.cursor()
+
+        # Eliminar la tabla si ya existe
+        cursor.execute("DROP TABLE IF EXISTS confirmados_vs_poblacion")
+
+        # Crear la tabla
+        cursor.execute('''
+            CREATE TABLE confirmados_vs_poblacion (
+                provincia TEXT,
+                confirmados INTEGER,
+                poblacion INTEGER,
+                proporcion REAL
+            )
+        ''')
+
+        for provincia, poblacion in poblacion_provincias.items():
+            cursor.execute('''
+                SELECT COUNT(*) FROM registros_limpios
+                WHERE clasificacion = 'CONFIRMADO'
+                AND residencia_provincia_nombre = ?
+            ''', (provincia,))
+
+            confirmados = cursor.fetchone()[0]
+            proporcion = confirmados / poblacion if poblacion else 0
+
+            cursor.execute('''
+                INSERT INTO confirmados_vs_poblacion (provincia, confirmados, poblacion, proporcion)
+                VALUES (?, ?, ?, ?)
+            ''', (provincia, confirmados, poblacion, proporcion))
+
+        conn.commit()
+        print("Tabla confirmados_vs_poblacion creada correctamente.")
+
+
+def mostrar_menor_proporcion_confirmados():
+    """
+    Muestra la provincia con menor proporción de casos confirmados respecto a su población.
+    """
+    with conectar() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT provincia, confirmados, poblacion, proporcion
+            FROM confirmados_vs_poblacion
+            ORDER BY proporcion ASC
+            LIMIT 1
+        ''')
+
+        menor = cursor.fetchone()
+
+        print("\nProvincia con menor proporción de casos confirmados respecto a su población:")
+        print(f"Provincia: {menor[0]}")
+        print(f"Confirmados: {menor[1]:,}")
+        print(f"Población: {menor[2]:,}")
+        print(f"Proporción: {menor[3]:.6f} ({menor[3]*100:.4f}%)")
+
+
+
+def crear_tabla_fallecidos_vs_poblacion():
+    '''
+    Crea una tabla con la proporción de fallecidos respecto a la población total por provincia.
+    '''
+
+    with conectar() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("DROP TABLE IF EXISTS fallecidos_vs_poblacion")
+        cursor.execute("""
+            CREATE TABLE fallecidos_vs_poblacion (
+                provincia TEXT PRIMARY KEY,
+                cantidad_fallecidos INTEGER,
+                poblacion_total INTEGER,
+                proporcion_fallecidos REAL
+            )
+        """)
+
+        for provincia, poblacion in poblacion_provincias.items():
+            cursor.execute("""
+                SELECT COUNT(*) FROM registros_limpios
+                WHERE fallecido = 'SI' AND residencia_provincia_nombre = ?
+            """, (provincia,))
+            fallecidos = cursor.fetchone()[0]
+            proporcion = fallecidos / poblacion if poblacion > 0 else 0
+            cursor.execute("""
+                INSERT INTO fallecidos_vs_poblacion (provincia, cantidad_fallecidos, poblacion_total, proporcion_fallecidos)
+                VALUES (?, ?, ?, ?)
+            """, (provincia, fallecidos, poblacion, proporcion))
+
+        conn.commit()
+        print("Tabla fallecidos_vs_poblacion creada correctamente.")
+
+
+def mostrar_mayor_proporcion_fallecidos():
+    '''
+    Muestra la provincia con mayor proporción de fallecidos respecto a su población.
+    '''
+
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT provincia, cantidad_fallecidos, poblacion_total, proporcion_fallecidos
+            FROM fallecidos_vs_poblacion
+            ORDER BY proporcion_fallecidos DESC
+            LIMIT 1
+        """)
+        fila = cursor.fetchone()
+
+    if fila:
+        print("\nProvincia con mayor proporción de fallecidos respecto a la población:")
+        print(f"Provincia: {fila[0]}")
+        print(f"Cantidad de fallecidos: {fila[1]}")
+        print(f"Población total: {fila[2]}")
+        print(f"Proporción: {fila[3]*100:.4f}%")
+    else:
+        print("No se encontraron datos para mostrar.")
+
+
+def calcular_indice_confirmados_por_sexo():
+    '''
+    Calcula el índice de confirmados por sexo y muestra en consola cuál tiene el mayor índice.
+    '''
+    with conectar() as conn:
+        cursor = conn.cursor()
+
+        # Obtenemos total y confirmados por sexo
+        cursor.execute('''
+            SELECT 
+                sexo,
+                COUNT(*) AS total,
+                SUM(CASE WHEN clasificacion = 'CONFIRMADO' THEN 1 ELSE 0 END) AS confirmados
+            FROM registros_limpios
+            WHERE sexo IN ('F', 'M')
+            GROUP BY sexo
+        ''')
+
+        resultados = cursor.fetchall()
+
+    print("\nÍndice de casos confirmados por sexo:\n")
+    print("Sexo | Total | Confirmados | Índice")
+    print("----------------------------------------")
+
+    max_indice = -1
+    sexo_max = None
+
+    for sexo, total, confirmados in resultados:
+        indice = confirmados / total if total else 0
+        print(f"{sexo:>4} | {total:>5} | {confirmados:>11} | {indice:.4f}")
+
+        if indice > max_indice:
+            max_indice = indice
+            sexo_max = sexo
+
+    print("\nEl mayor índice de casos confirmados lo tiene:", "Mujeres" if sexo_max == 'F' else "Varones")
+    print("Se utilizó como índice: confirmados / total por sexo.")
